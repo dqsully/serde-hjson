@@ -1,11 +1,13 @@
-# Serde JSON &emsp; [![Build Status]][travis] [![Latest Version]][crates.io] [![Rustc Version 1.31+]][rustc]
+# Serde Hjson
+
+<!-- &emsp; [![Build Status]][travis] [![Latest Version]][crates.io] [![Rustc Version 1.31+]][rustc]
 
 [Build Status]: https://img.shields.io/github/workflow/status/serde-rs/json/CI/master
 [travis]: https://github.com/serde-rs/json/actions?query=branch%3Amaster
 [Latest Version]: https://img.shields.io/crates/v/serde_hjson.svg
 [crates.io]: https://crates.io/crates/serde\_json
 [Rustc Version 1.31+]: https://img.shields.io/badge/rustc-1.31+-lightgray.svg
-[rustc]: https://blog.rust-lang.org/2018/12/06/Rust-1.31-and-rust-2018.html
+[rustc]: https://blog.rust-lang.org/2018/12/06/Rust-1.31-and-rust-2018.html -->
 
 **Serde is a framework for *ser*ializing and *de*serializing Rust data structures efficiently and generically.**
 
@@ -18,12 +20,28 @@ serde_hjson = "1.0"
 
 You may be looking for:
 
-- [JSON API documentation](https://docs.serde.rs/serde_hjson/)
+- [Hjson API documentation](https://docs.serde.rs/serde_hjson/)
 - [Serde API documentation](https://docs.serde.rs/serde/)
 - [Detailed documentation about Serde](https://serde.rs/)
 - [Setting up `#[derive(Serialize, Deserialize)]`](https://serde.rs/derive.html)
-- [Release notes](https://github.com/serde-rs/json/releases)
+- [Release notes](https://github.com/hjson/hjson-rust/releases)
 
+## WIP
+This is a work-in-progress fork of serde_json to convert it for Hjson
+
+* Parsing
+    * [x] Prelim single-quote, unquoted, and unquoted key strings
+    * [ ] Allow trailing commas
+    * [ ] Multiline strings
+    * [ ] Updated tests
+* Generating
+    * [ ] Research what a pretty format would look like
+* Other
+    * [ ] Update README documentation
+    * [ ] Merge into Hjson org
+    * [ ] CI/CD
+
+<!--
 JSON is a ubiquitous open-standard format that uses human-readable text to
 transmit data objects consisting of key-value pairs.
 
@@ -377,3 +395,4 @@ Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in this crate by you, as defined in the Apache-2.0 license, shall
 be dual licensed as above, without any additional terms or conditions.
 </sub>
+-->
