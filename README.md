@@ -1,13 +1,13 @@
 # Serde Hjson
 
-<!-- &emsp; [![Build Status]][travis] [![Latest Version]][crates.io] [![Rustc Version 1.31+]][rustc]
+<!-- &emsp; [![Build Status]][travis] [![Latest Version]][crates.io] [![Rustc Version 1.37+]][rustc]
 
 [Build Status]: https://img.shields.io/github/workflow/status/serde-rs/json/CI/master
 [travis]: https://github.com/serde-rs/json/actions?query=branch%3Amaster
 [Latest Version]: https://img.shields.io/crates/v/serde_hjson.svg
 [crates.io]: https://crates.io/crates/serde\_json
-[Rustc Version 1.31+]: https://img.shields.io/badge/rustc-1.31+-lightgray.svg
-[rustc]: https://blog.rust-lang.org/2018/12/06/Rust-1.31-and-rust-2018.html -->
+[Rustc Version 1.37+]: https://img.shields.io/badge/rustc-1.37+-lightgray.svg
+[rustc]: https://blog.rust-lang.org/2019/08/15/Rust-1.37.0.html -->
 
 **Serde is a framework for *ser*ializing and *de*serializing Rust data structures efficiently and generically.**
 
@@ -361,8 +361,8 @@ eyes as any of the above and may get closed without a response after some time.
 ## No-std support
 
 As long as there is a memory allocator, it is possible to use serde_hjson without
-the rest of the Rust standard library. This is supported on Rust 1.36+. Disable
-the default "std" feature and enable the "alloc" feature:
+the rest of the Rust standard library. Disable the default "std" feature and
+enable the "alloc" feature:
 
 ```toml
 [dependencies]
