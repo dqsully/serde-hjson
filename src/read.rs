@@ -31,6 +31,9 @@ pub trait Read<'de>: private::Sealed {
     /// Only valid after a call to peek(). Discards the peeked byte.
     #[doc(hidden)]
     fn discard(&mut self);
+    /// Only valid after a call to peek(). Discards the peeked byte.
+    #[doc(hidden)]
+    fn discard_n(&mut self, bytes: usize);
 
     /// Position of the most recent call to next().
     ///
@@ -514,6 +517,35 @@ where
         }
     }
 
+    #[cfg(not(feature = "raw_value"))]
+    #[inline]
+    fn discard_n(&mut self, bytes: usize) {
+        if bytes >= self.len {
+            self.len = 0;
+        } else {
+            self.len -= bytes;
+            self.ch.copy_within(bytes.., 0);
+        }
+    }
+
+    #[cfg(feature = "raw_value")]
+    fn discard_n(&mut self, bytes: usize) {
+        if bytes >= self.len {
+            if let Some(ref mut buf) = self.raw_buffer {
+                buf.extend_from_slice(&self.ch[..self.len]);
+            }
+
+            self.len = 0;
+        } else {
+            if let Some(ref mut buf) = self.raw_buffer {
+                buf.extend_from_slice(&self.ch[..bytes]);
+            }
+
+            self.len -= bytes;
+            self.ch.copy_within(bytes.., 0);
+        }
+    }
+
     fn position(&self) -> Position {
         Position {
             line: self.iter.line(),
@@ -969,6 +1001,11 @@ impl<'a> Read<'a> for SliceRead<'a> {
         self.index += 1;
     }
 
+    #[inline]
+    fn discard_n(&mut self, bytes: usize) {
+        self.index += bytes;
+    }
+
     fn position(&self) -> Position {
         self.position_of_index(self.index)
     }
@@ -1203,6 +1240,11 @@ impl<'a> Read<'a> for StrRead<'a> {
     #[inline]
     fn discard(&mut self) {
         self.delegate.discard();
+    }
+
+    #[inline]
+    fn discard_n(&mut self, bytes: usize) {
+        self.delegate.discard_n(bytes);
     }
 
     fn position(&self) -> Position {
