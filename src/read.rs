@@ -59,7 +59,35 @@ pub trait Read<'de>: private::Sealed {
     /// string until the next quotation mark using the given scratch space if
     /// necessary. The scratch space is initially empty.
     #[doc(hidden)]
-    fn parse_str<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'de, 's, str>>;
+    fn parse_double_quoted_str<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'de, 's, str>>;
+
+    /// Assumes the previous byte was an apostrophe. Parses a JSON-escaped
+    /// string until the next apostrophe using the given scratch space if
+    /// necessary. The scratch space is initially empty.
+    #[doc(hidden)]
+    fn parse_single_quoted_str<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'de, 's, str>>;
+
+    /// Parses an unquoted string until the next newline using the given scratch
+    /// space if necessary. The scratch space is initially empty.
+    #[doc(hidden)]
+    fn parse_unquoted_str<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'de, 's, str>>;
+
+    /// Parses an unquoted object key string until the next newline using the
+    /// given scratch space if necessary. The scratch space is initially empty.
+    #[doc(hidden)]
+    fn parse_unquoted_key_str<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'de, 's, str>>;
 
     /// Assumes the previous byte was a quotation mark. Parses a JSON-escaped
     /// string until the next quotation mark using the given scratch space if
@@ -68,7 +96,41 @@ pub trait Read<'de>: private::Sealed {
     /// This function returns the raw bytes in the string with escape sequences
     /// expanded but without performing unicode validation.
     #[doc(hidden)]
-    fn parse_str_raw<'s>(
+    fn parse_double_quoted_str_raw<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'de, 's, [u8]>>;
+
+    /// Assumes the previous byte was an apostrophe. Parses a JSON-escaped
+    /// string until the next apostrophe using the given scratch space if
+    /// necessary. The scratch space is initially empty.
+    ///
+    /// This function returns the raw bytes in the string with escape sequences
+    /// expanded but without performing unicode validation.
+    #[doc(hidden)]
+    fn parse_single_quoted_str_raw<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'de, 's, [u8]>>;
+
+    /// Parses an unquoted string until the next newline using the given scratch
+    /// space if necessary. The scratch space is initially empty.
+    ///
+    /// This function returns the raw bytes in the string with escape sequences
+    /// expanded but without performing unicode validation.
+    #[doc(hidden)]
+    fn parse_unquoted_str_raw<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'de, 's, [u8]>>;
+
+    /// Parses an unquoted object key string until the next newline using the
+    /// given scratch space if necessary. The scratch space is initially empty.
+    ///
+    /// This function returns the raw bytes in the string with escape sequences
+    /// expanded but without performing unicode validation.
+    #[doc(hidden)]
+    fn parse_unquoted_key_str_raw<'s>(
         &'s mut self,
         scratch: &'s mut Vec<u8>,
     ) -> Result<Reference<'de, 's, [u8]>>;
@@ -76,9 +138,23 @@ pub trait Read<'de>: private::Sealed {
     /// Assumes the previous byte was a quotation mark. Parses a JSON-escaped
     /// string until the next quotation mark but discards the data.
     #[doc(hidden)]
-    fn ignore_str(&mut self) -> Result<()>;
+    fn ignore_double_quoted_str(&mut self) -> Result<()>;
 
-    /// Assumes the previous byte was a hex escape sequnce ('\u') in a string.
+    /// Assumes the previous byte was an apostrophe. Parses a JSON-escaped
+    /// string until the next quotation mark but discards the data.
+    #[doc(hidden)]
+    fn ignore_single_quoted_str(&mut self) -> Result<()>;
+
+    /// Parses an unquoted string until the next newline but discards the data.
+    #[doc(hidden)]
+    fn ignore_unquoted_str(&mut self) -> Result<()>;
+
+    /// Parses an unquoted object key string until the next newline but discards
+    /// the data.
+    #[doc(hidden)]
+    fn ignore_unquoted_key_str(&mut self) -> Result<()>;
+
+    /// Assumes the previous byte was a hex escape sequence ('\u') in a string.
     /// Parses next hexadecimal sequence.
     #[doc(hidden)]
     fn decode_hex_escape(&mut self) -> Result<u16>;
@@ -203,7 +279,7 @@ impl<R> IoRead<R>
 where
     R: io::Read,
 {
-    fn parse_str_bytes<'s, T, F>(
+    fn parse_double_quoted_str_bytes<'s, T, F>(
         &'s mut self,
         scratch: &'s mut Vec<u8>,
         validate: bool,
@@ -215,7 +291,7 @@ where
     {
         loop {
             let ch = tri!(next_or_eof(self));
-            if !ESCAPE[ch as usize] {
+            if !DOUBLE_QUOTE_ESCAPE[ch as usize] {
                 scratch.push(ch);
                 continue;
             }
@@ -225,6 +301,107 @@ where
                 }
                 b'\\' => {
                     tri!(parse_escape(self, scratch));
+                }
+                _ => {
+                    if validate {
+                        return error(self, ErrorCode::ControlCharacterWhileParsingString);
+                    }
+                    scratch.push(ch);
+                }
+            }
+        }
+    }
+
+    fn parse_single_quoted_str_bytes<'s, T, F>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+        validate: bool,
+        result: F,
+    ) -> Result<T>
+    where
+        T: 's,
+        F: FnOnce(&'s Self, &'s [u8]) -> Result<T>,
+    {
+        loop {
+            let ch = tri!(next_or_eof(self));
+            if !SINGLE_QUOTE_ESCAPE[ch as usize] {
+                scratch.push(ch);
+                continue;
+            }
+            match ch {
+                b'\'' => {
+                    return result(self, scratch);
+                }
+                b'\\' => {
+                    tri!(parse_escape(self, scratch));
+                }
+                _ => {
+                    if validate {
+                        return error(self, ErrorCode::ControlCharacterWhileParsingString);
+                    }
+                    scratch.push(ch);
+                }
+            }
+        }
+    }
+
+    fn parse_unquoted_str_bytes<'s, T, F>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+        validate: bool,
+        result: F,
+    ) -> Result<T>
+    where
+        T: 's,
+        F: FnOnce(&'s Self, &'s [u8]) -> Result<T>,
+    {
+        loop {
+            let ch = tri!(next_or_eof(self));
+            if !NO_QUOTE_ESCAPE[ch as usize] {
+                scratch.push(ch);
+                continue;
+            }
+            match ch {
+                b'\n' => {
+                    let mut index = scratch.len() - 1;
+                    let mut ch = scratch[index];
+
+                    while ch == b' ' || ch == b'\t' || ch == b'\n' || ch == b'\r' {
+                        index -= 1;
+                        ch = scratch[index];
+                    }
+
+                    return result(self, &scratch[..=index]);
+                }
+                _ => {
+                    if validate {
+                        return error(self, ErrorCode::ControlCharacterWhileParsingString);
+                    }
+                    scratch.push(ch);
+                }
+            }
+        }
+    }
+
+    fn parse_unquoted_key_str_bytes<'s, T, F>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+        validate: bool,
+        result: F,
+    ) -> Result<T>
+    where
+        T: 's,
+        F: FnOnce(&'s Self, &'s [u8]) -> Result<T>,
+    {
+        loop {
+            let ch = tri!(next_or_eof(self));
+            if !NO_QUOTE_KEY_ESCAPE[ch as usize] {
+                scratch.push(ch);
+                continue;
+            }
+            match ch {
+                b'\n' => {
+                    return result(self, scratch);
                 }
                 _ => {
                     if validate {
@@ -320,23 +497,74 @@ where
         }
     }
 
-    fn parse_str<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'de, 's, str>> {
-        self.parse_str_bytes(scratch, true, as_str)
+    fn parse_double_quoted_str<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'de, 's, str>> {
+        self.parse_double_quoted_str_bytes(scratch, true, as_str)
             .map(Reference::Copied)
     }
 
-    fn parse_str_raw<'s>(
+    fn parse_single_quoted_str<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'de, 's, str>> {
+        self.parse_single_quoted_str_bytes(scratch, true, as_str)
+            .map(Reference::Copied)
+    }
+
+    fn parse_unquoted_str<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'de, 's, str>> {
+        self.parse_unquoted_str_bytes(scratch, true, as_str)
+            .map(Reference::Copied)
+    }
+
+    fn parse_unquoted_key_str<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'de, 's, str>> {
+        self.parse_unquoted_key_str_bytes(scratch, true, as_str)
+            .map(Reference::Copied)
+    }
+
+    fn parse_double_quoted_str_raw<'s>(
         &'s mut self,
         scratch: &'s mut Vec<u8>,
     ) -> Result<Reference<'de, 's, [u8]>> {
-        self.parse_str_bytes(scratch, false, |_, bytes| Ok(bytes))
+        self.parse_double_quoted_str_bytes(scratch, false, |_, bytes| Ok(bytes))
             .map(Reference::Copied)
     }
 
-    fn ignore_str(&mut self) -> Result<()> {
+    fn parse_single_quoted_str_raw<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'de, 's, [u8]>> {
+        self.parse_single_quoted_str_bytes(scratch, false, |_, bytes| Ok(bytes))
+            .map(Reference::Copied)
+    }
+
+    fn parse_unquoted_str_raw<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'de, 's, [u8]>> {
+        self.parse_unquoted_str_bytes(scratch, false, |_, bytes| Ok(bytes))
+            .map(Reference::Copied)
+    }
+
+    fn parse_unquoted_key_str_raw<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'de, 's, [u8]>> {
+        self.parse_unquoted_key_str_bytes(scratch, false, |_, bytes| Ok(bytes))
+            .map(Reference::Copied)
+    }
+
+    fn ignore_double_quoted_str(&mut self) -> Result<()> {
         loop {
             let ch = tri!(next_or_eof(self));
-            if !ESCAPE[ch as usize] {
+            if !DOUBLE_QUOTE_ESCAPE[ch as usize] {
                 continue;
             }
             match ch {
@@ -345,6 +573,60 @@ where
                 }
                 b'\\' => {
                     tri!(ignore_escape(self));
+                }
+                _ => {
+                    return error(self, ErrorCode::ControlCharacterWhileParsingString);
+                }
+            }
+        }
+    }
+
+    fn ignore_single_quoted_str(&mut self) -> Result<()> {
+        loop {
+            let ch = tri!(next_or_eof(self));
+            if !SINGLE_QUOTE_ESCAPE[ch as usize] {
+                continue;
+            }
+            match ch {
+                b'\'' => {
+                    return Ok(());
+                }
+                b'\\' => {
+                    tri!(ignore_escape(self));
+                }
+                _ => {
+                    return error(self, ErrorCode::ControlCharacterWhileParsingString);
+                }
+            }
+        }
+    }
+
+    fn ignore_unquoted_str(&mut self) -> Result<()> {
+        loop {
+            let ch = tri!(next_or_eof(self));
+            if !NO_QUOTE_ESCAPE[ch as usize] {
+                continue;
+            }
+            match ch {
+                b'\n' => {
+                    return Ok(());
+                }
+                _ => {
+                    return error(self, ErrorCode::ControlCharacterWhileParsingString);
+                }
+            }
+        }
+    }
+
+    fn ignore_unquoted_key_str(&mut self) -> Result<()> {
+        loop {
+            let ch = tri!(next_or_eof(self));
+            if !NO_QUOTE_KEY_ESCAPE[ch as usize] {
+                continue;
+            }
+            match ch {
+                b' ' | b'\t' | b'\n' | b'\r' => {
+                    return Ok(());
                 }
                 _ => {
                     return error(self, ErrorCode::ControlCharacterWhileParsingString);
@@ -424,7 +706,7 @@ impl<'a> SliceRead<'a> {
     /// The big optimization here over IoRead is that if the string contains no
     /// backslash escape sequences, the returned &str is a slice of the raw JSON
     /// data so we avoid copying into the scratch space.
-    fn parse_str_bytes<'s, T, F>(
+    fn parse_double_quoted_str_bytes<'s, T, F>(
         &'s mut self,
         scratch: &'s mut Vec<u8>,
         validate: bool,
@@ -438,7 +720,7 @@ impl<'a> SliceRead<'a> {
         let mut start = self.index;
 
         loop {
-            while self.index < self.slice.len() && !ESCAPE[self.slice[self.index] as usize] {
+            while self.index < self.slice.len() && !DOUBLE_QUOTE_ESCAPE[self.slice[self.index] as usize] {
                 self.index += 1;
             }
             if self.index == self.slice.len() {
@@ -463,6 +745,143 @@ impl<'a> SliceRead<'a> {
                     self.index += 1;
                     tri!(parse_escape(self, scratch));
                     start = self.index;
+                }
+                _ => {
+                    self.index += 1;
+                    if validate {
+                        return error(self, ErrorCode::ControlCharacterWhileParsingString);
+                    }
+                }
+            }
+        }
+    }
+
+    /// The big optimization here over IoRead is that if the string contains no
+    /// backslash escape sequences, the returned &str is a slice of the raw JSON
+    /// data so we avoid copying into the scratch space.
+    fn parse_single_quoted_str_bytes<'s, T, F>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+        validate: bool,
+        result: F,
+    ) -> Result<Reference<'a, 's, T>>
+    where
+        T: ?Sized + 's,
+        F: for<'f> FnOnce(&'s Self, &'f [u8]) -> Result<&'f T>,
+    {
+        // Index of the first byte not yet copied into the scratch space.
+        let mut start = self.index;
+
+        loop {
+            while self.index < self.slice.len() && !SINGLE_QUOTE_ESCAPE[self.slice[self.index] as usize] {
+                self.index += 1;
+            }
+            if self.index == self.slice.len() {
+                return error(self, ErrorCode::EofWhileParsingString);
+            }
+            match self.slice[self.index] {
+                b'\'' => {
+                    if scratch.is_empty() {
+                        // Fast path: return a slice of the raw JSON without any
+                        // copying.
+                        let borrowed = &self.slice[start..self.index];
+                        self.index += 1;
+                        return result(self, borrowed).map(Reference::Borrowed);
+                    } else {
+                        scratch.extend_from_slice(&self.slice[start..self.index]);
+                        self.index += 1;
+                        return result(self, scratch).map(Reference::Copied);
+                    }
+                }
+                b'\\' => {
+                    scratch.extend_from_slice(&self.slice[start..self.index]);
+                    self.index += 1;
+                    tri!(parse_escape(self, scratch));
+                    start = self.index;
+                }
+                _ => {
+                    self.index += 1;
+                    if validate {
+                        return error(self, ErrorCode::ControlCharacterWhileParsingString);
+                    }
+                }
+            }
+        }
+    }
+
+    /// The big optimization here over IoRead is that if the string contains no
+    /// backslash escape sequences, the returned &str is a slice of the raw JSON
+    /// data so we avoid copying into the scratch space.
+    fn parse_unquoted_str_bytes<'s, T, F>(
+        &'s mut self,
+        validate: bool,
+        result: F,
+    ) -> Result<Reference<'a, 's, T>>
+    where
+        T: ?Sized + 's,
+        F: for<'f> FnOnce(&'s Self, &'f [u8]) -> Result<&'f T>,
+    {
+        // Index of the first byte not yet copied into the scratch space.
+        let start = self.index;
+
+        loop {
+            while self.index < self.slice.len() && !NO_QUOTE_ESCAPE[self.slice[self.index] as usize] {
+                self.index += 1;
+            }
+            if self.index == self.slice.len() {
+                return error(self, ErrorCode::EofWhileParsingString);
+            }
+            match self.slice[self.index] {
+                b'\n' => {
+                    let mut index = self.index - 1;
+                    let mut ch = self.slice[index];
+
+                    while ch == b' ' || ch == b'\t' || ch == b'\n' || ch == b'\r' {
+                        index -= 1;
+                        ch = self.slice[index];
+                    }
+
+                    let borrowed = &self.slice[start..=index];
+                    self.index += 1;
+                    return result(self, borrowed).map(Reference::Borrowed);
+                }
+                _ => {
+                    self.index += 1;
+                    if validate {
+                        return error(self, ErrorCode::ControlCharacterWhileParsingString);
+                    }
+                }
+            }
+        }
+    }
+
+    /// The big optimization here over IoRead is that if the string contains no
+    /// backslash escape sequences, the returned &str is a slice of the raw JSON
+    /// data so we avoid copying into the scratch space.
+    fn parse_unquoted_key_str_bytes<'s, T, F>(
+        &'s mut self,
+        validate: bool,
+        result: F,
+    ) -> Result<Reference<'a, 's, T>>
+    where
+        T: ?Sized + 's,
+        F: for<'f> FnOnce(&'s Self, &'f [u8]) -> Result<&'f T>,
+    {
+        // Index of the first byte not yet copied into the scratch space.
+        let start = self.index;
+
+        loop {
+            while self.index < self.slice.len() && !NO_QUOTE_KEY_ESCAPE[self.slice[self.index] as usize] {
+                self.index += 1;
+            }
+            if self.index == self.slice.len() {
+                return error(self, ErrorCode::EofWhileParsingString);
+            }
+            match self.slice[self.index] {
+                b' ' | b'\t' | b'\n' | b'\r' => {
+                    let borrowed = &self.slice[start..self.index];
+                    self.index += 1;
+                    return result(self, borrowed).map(Reference::Borrowed);
                 }
                 _ => {
                     self.index += 1;
@@ -521,20 +940,65 @@ impl<'a> Read<'a> for SliceRead<'a> {
         self.index
     }
 
-    fn parse_str<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'a, 's, str>> {
-        self.parse_str_bytes(scratch, true, as_str)
+    fn parse_double_quoted_str<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'a, 's, str>> {
+        self.parse_double_quoted_str_bytes(scratch, true, as_str)
     }
 
-    fn parse_str_raw<'s>(
+    fn parse_single_quoted_str<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'a, 's, str>> {
+        self.parse_single_quoted_str_bytes(scratch, true, as_str)
+    }
+
+    fn parse_unquoted_str<'s>(
+        &'s mut self,
+        _scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'a, 's, str>> {
+        self.parse_unquoted_str_bytes(true, as_str)
+    }
+
+    fn parse_unquoted_key_str<'s>(
+        &'s mut self,
+        _scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'a, 's, str>> {
+        self.parse_unquoted_key_str_bytes(true, as_str)
+    }
+
+    fn parse_double_quoted_str_raw<'s>(
         &'s mut self,
         scratch: &'s mut Vec<u8>,
     ) -> Result<Reference<'a, 's, [u8]>> {
-        self.parse_str_bytes(scratch, false, |_, bytes| Ok(bytes))
+        self.parse_double_quoted_str_bytes(scratch, false, |_, bytes| Ok(bytes))
     }
 
-    fn ignore_str(&mut self) -> Result<()> {
+    fn parse_single_quoted_str_raw<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'a, 's, [u8]>> {
+        self.parse_single_quoted_str_bytes(scratch, false, |_, bytes| Ok(bytes))
+    }
+
+    fn parse_unquoted_str_raw<'s>(
+        &'s mut self,
+        _scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'a, 's, [u8]>> {
+        self.parse_unquoted_str_bytes(false, |_, bytes| Ok(bytes))
+    }
+
+    fn parse_unquoted_key_str_raw<'s>(
+        &'s mut self,
+        _scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'a, 's, [u8]>> {
+        self.parse_unquoted_key_str_bytes(false, |_, bytes| Ok(bytes))
+    }
+
+    fn ignore_double_quoted_str(&mut self) -> Result<()> {
         loop {
-            while self.index < self.slice.len() && !ESCAPE[self.slice[self.index] as usize] {
+            while self.index < self.slice.len() && !DOUBLE_QUOTE_ESCAPE[self.slice[self.index] as usize] {
                 self.index += 1;
             }
             if self.index == self.slice.len() {
@@ -552,6 +1016,66 @@ impl<'a> Read<'a> for SliceRead<'a> {
                 _ => {
                     return error(self, ErrorCode::ControlCharacterWhileParsingString);
                 }
+            }
+        }
+    }
+
+    fn ignore_single_quoted_str(&mut self) -> Result<()> {
+        loop {
+            while self.index < self.slice.len() && !SINGLE_QUOTE_ESCAPE[self.slice[self.index] as usize] {
+                self.index += 1;
+            }
+            if self.index == self.slice.len() {
+                return error(self, ErrorCode::EofWhileParsingString);
+            }
+            match self.slice[self.index] {
+                b'\'' => {
+                    self.index += 1;
+                    return Ok(());
+                }
+                b'\\' => {
+                    self.index += 1;
+                    tri!(ignore_escape(self));
+                }
+                _ => {
+                    return error(self, ErrorCode::ControlCharacterWhileParsingString);
+                }
+            }
+        }
+    }
+
+    fn ignore_unquoted_str(&mut self) -> Result<()> {
+        while self.index < self.slice.len() && !NO_QUOTE_ESCAPE[self.slice[self.index] as usize] {
+            self.index += 1;
+        }
+        if self.index == self.slice.len() {
+            return error(self, ErrorCode::EofWhileParsingString);
+        }
+        match self.slice[self.index] {
+            b'\n' => {
+                self.index += 1;
+                Ok(())
+            }
+            _ => {
+                error(self, ErrorCode::ControlCharacterWhileParsingString)
+            }
+        }
+    }
+
+    fn ignore_unquoted_key_str(&mut self) -> Result<()> {
+        while self.index < self.slice.len() && !NO_QUOTE_KEY_ESCAPE[self.slice[self.index] as usize] {
+            self.index += 1;
+        }
+        if self.index == self.slice.len() {
+            return error(self, ErrorCode::EofWhileParsingString);
+        }
+        match self.slice[self.index] {
+            b' ' | b'\t' | b'\n' | b'\r' => {
+                self.index += 1;
+                Ok(())
+            }
+            _ => {
+                error(self, ErrorCode::ControlCharacterWhileParsingString)
             }
         }
     }
@@ -645,23 +1169,92 @@ impl<'a> Read<'a> for StrRead<'a> {
         self.delegate.byte_offset()
     }
 
-    fn parse_str<'s>(&'s mut self, scratch: &'s mut Vec<u8>) -> Result<Reference<'a, 's, str>> {
-        self.delegate.parse_str_bytes(scratch, true, |_, bytes| {
+    fn parse_double_quoted_str<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'a, 's, str>> {
+        self.delegate.parse_double_quoted_str_bytes(scratch, true, |_, bytes| {
             // The input is assumed to be valid UTF-8 and the \u-escapes are
             // checked along the way, so don't need to check here.
             Ok(unsafe { str::from_utf8_unchecked(bytes) })
         })
     }
 
-    fn parse_str_raw<'s>(
+    fn parse_single_quoted_str<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'a, 's, str>> {
+        self.delegate.parse_single_quoted_str_bytes(scratch, true, |_, bytes| {
+            // The input is assumed to be valid UTF-8 and the \u-escapes are
+            // checked along the way, so don't need to check here.
+            Ok(unsafe { str::from_utf8_unchecked(bytes) })
+        })
+    }
+
+    fn parse_unquoted_str<'s>(
+        &'s mut self,
+        _scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'a, 's, str>> {
+        self.delegate.parse_unquoted_str_bytes(true, |_, bytes| {
+            // The input is assumed to be valid UTF-8 and the \u-escapes are
+            // checked along the way, so don't need to check here.
+            Ok(unsafe { str::from_utf8_unchecked(bytes) })
+        })
+    }
+
+    fn parse_unquoted_key_str<'s>(
+        &'s mut self,
+        _scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'a, 's, str>> {
+        self.delegate.parse_unquoted_key_str_bytes(true, |_, bytes| {
+            // The input is assumed to be valid UTF-8 and the \u-escapes are
+            // checked along the way, so don't need to check here.
+            Ok(unsafe { str::from_utf8_unchecked(bytes) })
+        })
+    }
+
+    fn parse_double_quoted_str_raw<'s>(
         &'s mut self,
         scratch: &'s mut Vec<u8>,
     ) -> Result<Reference<'a, 's, [u8]>> {
-        self.delegate.parse_str_raw(scratch)
+        self.delegate.parse_double_quoted_str_raw(scratch)
     }
 
-    fn ignore_str(&mut self) -> Result<()> {
-        self.delegate.ignore_str()
+    fn parse_single_quoted_str_raw<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'a, 's, [u8]>> {
+        self.delegate.parse_single_quoted_str_raw(scratch)
+    }
+
+    fn parse_unquoted_str_raw<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'a, 's, [u8]>> {
+        self.delegate.parse_unquoted_str_raw(scratch)
+    }
+
+    fn parse_unquoted_key_str_raw<'s>(
+        &'s mut self,
+        scratch: &'s mut Vec<u8>,
+    ) -> Result<Reference<'a, 's, [u8]>> {
+        self.delegate.parse_unquoted_key_str_raw(scratch)
+    }
+
+    fn ignore_double_quoted_str(&mut self) -> Result<()> {
+        self.delegate.ignore_double_quoted_str()
+    }
+
+    fn ignore_single_quoted_str(&mut self) -> Result<()> {
+        self.delegate.ignore_single_quoted_str()
+    }
+
+    fn ignore_unquoted_str(&mut self) -> Result<()> {
+        self.delegate.ignore_unquoted_str()
+    }
+
+    fn ignore_unquoted_key_str(&mut self) -> Result<()> {
+        self.delegate.ignore_unquoted_key_str()
     }
 
     fn decode_hex_escape(&mut self) -> Result<u16> {
@@ -700,9 +1293,9 @@ pub trait Fused: private::Sealed {}
 impl<'a> Fused for SliceRead<'a> {}
 impl<'a> Fused for StrRead<'a> {}
 
-// Lookup table of bytes that must be escaped. A value of true at index i means
+// Lookup tables of bytes that must be escaped. A value of true at index i means
 // that byte i requires an escape sequence in the input.
-static ESCAPE: [bool; 256] = {
+static DOUBLE_QUOTE_ESCAPE: [bool; 256] = {
     const CT: bool = true; // control character \x00..=\x1F
     const QU: bool = true; // quote \x22
     const BS: bool = true; // backslash \x5C
@@ -717,6 +1310,81 @@ static ESCAPE: [bool; 256] = {
         __, __, __, __, __, __, __, __, __, __, __, __, BS, __, __, __, // 5
         __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
         __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 7
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 8
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 9
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // A
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // B
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // C
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // D
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // E
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // F
+    ]
+};
+static SINGLE_QUOTE_ESCAPE: [bool; 256] = {
+    const CT: bool = true; // control character \x00..=\x1F
+    const AP: bool = true; // apostrophe \x27
+    const BS: bool = true; // backslash \x5C
+    const __: bool = false; // allow unescaped
+    [
+        //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+        CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, // 0
+        CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, // 1
+        __, __, __, __, __, __, __, AP, __, __, __, __, __, __, __, __, // 2
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 3
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 4
+        __, __, __, __, __, __, __, __, __, __, __, __, BS, __, __, __, // 5
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 7
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 8
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 9
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // A
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // B
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // C
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // D
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // E
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // F
+    ]
+};
+static NO_QUOTE_ESCAPE: [bool; 256] = {
+    const CT: bool = true; // control character \x00..=\x1F
+    const __: bool = false; // allow unescaped
+    [
+        //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+        CT, CT, CT, CT, CT, CT, CT, CT, CT, __, CT, CT, CT, CT, CT, CT, // 0
+        CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, // 1
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 2
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 3
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 4
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 5
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 7
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 8
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 9
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // A
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // B
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // C
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // D
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // E
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // F
+    ]
+};
+static NO_QUOTE_KEY_ESCAPE: [bool; 256] = {
+    const CT: bool = true; // control character \x00..=\x1F
+    const CM: bool = true; // comma \x2C
+    const CO: bool = true; // colon \x3A
+    const SB: bool = true; // square brackets \x5B and \x5D
+    const CB: bool = true; // curly brackets \x7B and \x7D
+    const __: bool = false; // allow unescaped
+    [
+        //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+        CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, // 0
+        CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, CT, // 1
+        __, __, __, __, __, __, __, __, __, __, __, __, CM, __, __, __, // 2
+        __, __, __, __, __, __, __, __, __, __, CO, __, __, __, __, __, // 3
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 4
+        __, __, __, __, __, __, __, __, __, __, __, SB, __, SB, __, __, // 5
+        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
+        __, __, __, __, __, __, __, __, __, __, __, CB, __, CB, __, __, // 7
         __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 8
         __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 9
         __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // A
@@ -757,6 +1425,7 @@ fn parse_escape<'de, R: Read<'de>>(read: &mut R, scratch: &mut Vec<u8>) -> Resul
 
     match ch {
         b'"' => scratch.push(b'"'),
+        b'\'' => scratch.push(b'\''),
         b'\\' => scratch.push(b'\\'),
         b'/' => scratch.push(b'/'),
         b'b' => scratch.push(b'\x08'),
@@ -823,7 +1492,7 @@ where
     let ch = tri!(next_or_eof(read));
 
     match ch {
-        b'"' | b'\\' | b'/' | b'b' | b'f' | b'n' | b'r' | b't' => {}
+        b'"' | b'\'' | b'\\' | b'/' | b'b' | b'f' | b'n' | b'r' | b't' => {}
         b'u' => {
             let n = match tri!(read.decode_hex_escape()) {
                 0xDC00..=0xDFFF => {

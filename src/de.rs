@@ -287,14 +287,29 @@ impl<'de, R: Read<'de>> Deserializer<R> {
             b'"' => {
                 self.eat_char();
                 self.scratch.clear();
-                match self.read.parse_str(&mut self.scratch) {
+                match self.read.parse_double_quoted_str(&mut self.scratch) {
+                    Ok(s) => de::Error::invalid_type(Unexpected::Str(&s), exp),
+                    Err(err) => return err,
+                }
+            }
+            b'\'' => {
+                self.eat_char();
+                self.scratch.clear();
+                match self.read.parse_single_quoted_str(&mut self.scratch) {
                     Ok(s) => de::Error::invalid_type(Unexpected::Str(&s), exp),
                     Err(err) => return err,
                 }
             }
             b'[' => de::Error::invalid_type(Unexpected::Seq, exp),
             b'{' => de::Error::invalid_type(Unexpected::Map, exp),
-            _ => self.peek_error(ErrorCode::ExpectedSomeValue),
+            b',' | b':' | b']' | b'}' => self.peek_error(ErrorCode::ExpectedSomeValue),
+            _ => {
+                self.scratch.clear();
+                match self.read.parse_unquoted_str(&mut self.scratch) {
+                    Ok(s) => de::Error::invalid_type(Unexpected::Str(&s), exp),
+                    Err(err) => return err,
+                }
+            }
         };
 
         self.fix_position(err)
@@ -1040,7 +1055,12 @@ impl<'de, R: Read<'de>> Deserializer<R> {
                 }
                 b'"' => {
                     self.eat_char();
-                    tri!(self.read.ignore_str());
+                    tri!(self.read.ignore_double_quoted_str());
+                    None
+                }
+                b'\'' => {
+                    self.eat_char();
+                    tri!(self.read.ignore_single_quoted_str());
                     None
                 }
                 frame @ b'[' | frame @ b'{' => {
@@ -1048,7 +1068,11 @@ impl<'de, R: Read<'de>> Deserializer<R> {
                     self.eat_char();
                     Some(frame)
                 }
-                _ => return Err(self.peek_error(ErrorCode::ExpectedSomeValue)),
+                b',' | b':' | b']' | b'}' => return Err(self.peek_error(ErrorCode::ExpectedSomeValue)),
+                _ => {
+                    tri!(self.read.ignore_unquoted_str());
+                    None
+                }
             };
 
             let (mut accept_comma, mut frame) = match frame {
@@ -1100,11 +1124,19 @@ impl<'de, R: Read<'de>> Deserializer<R> {
 
             if frame == b'{' {
                 match tri!(self.parse_whitespace()) {
-                    Some(b'"') => self.eat_char(),
-                    Some(_) => return Err(self.peek_error(ErrorCode::KeyMustBeAString)),
+                    Some(b'"') => {
+                        self.eat_char();
+                        tri!(self.read.ignore_double_quoted_str())
+                    }
+                    | Some(b',')
+                    | Some(b':')
+                    | Some(b'[')
+                    | Some(b']')
+                    | Some(b'{')
+                    | Some(b'}') => return Err(self.peek_error(ErrorCode::KeyMustBeAString)),
+                    Some(_) => tri!(self.read.ignore_unquoted_key_str()),
                     None => return Err(self.peek_error(ErrorCode::EofWhileParsingObject)),
                 }
-                tri!(self.read.ignore_str());
                 match tri!(self.parse_whitespace()) {
                     Some(b':') => self.eat_char(),
                     Some(_) => return Err(self.peek_error(ErrorCode::ExpectedColon)),
@@ -1323,7 +1355,15 @@ impl<'de, 'a, R: Read<'de>> de::Deserializer<'de> for &'a mut Deserializer<R> {
             b'"' => {
                 self.eat_char();
                 self.scratch.clear();
-                match tri!(self.read.parse_str(&mut self.scratch)) {
+                match tri!(self.read.parse_double_quoted_str(&mut self.scratch)) {
+                    Reference::Borrowed(s) => visitor.visit_borrowed_str(s),
+                    Reference::Copied(s) => visitor.visit_str(s),
+                }
+            }
+            b'\'' => {
+                self.eat_char();
+                self.scratch.clear();
+                match tri!(self.read.parse_single_quoted_str(&mut self.scratch)) {
                     Reference::Borrowed(s) => visitor.visit_borrowed_str(s),
                     Reference::Copied(s) => visitor.visit_str(s),
                 }
@@ -1350,7 +1390,14 @@ impl<'de, 'a, R: Read<'de>> de::Deserializer<'de> for &'a mut Deserializer<R> {
                     (Err(err), _) | (_, Err(err)) => Err(err),
                 }
             }
-            _ => Err(self.peek_error(ErrorCode::ExpectedSomeValue)),
+            b',' | b':' | b']' | b'}' => Err(self.peek_error(ErrorCode::ExpectedSomeValue)),
+            _ => {
+                self.scratch.clear();
+                match tri!(self.read.parse_unquoted_str(&mut self.scratch)) {
+                    Reference::Borrowed(s) => visitor.visit_borrowed_str(s),
+                    Reference::Copied(s) => visitor.visit_str(s),
+                }
+            }
         };
 
         match value {
@@ -1504,12 +1551,27 @@ impl<'de, 'a, R: Read<'de>> de::Deserializer<'de> for &'a mut Deserializer<R> {
             b'"' => {
                 self.eat_char();
                 self.scratch.clear();
-                match tri!(self.read.parse_str(&mut self.scratch)) {
+                match tri!(self.read.parse_double_quoted_str(&mut self.scratch)) {
                     Reference::Borrowed(s) => visitor.visit_borrowed_str(s),
                     Reference::Copied(s) => visitor.visit_str(s),
                 }
             }
-            _ => Err(self.peek_invalid_type(&visitor)),
+            b'\'' => {
+                self.eat_char();
+                self.scratch.clear();
+                match tri!(self.read.parse_single_quoted_str(&mut self.scratch)) {
+                    Reference::Borrowed(s) => visitor.visit_borrowed_str(s),
+                    Reference::Copied(s) => visitor.visit_str(s),
+                }
+            }
+            b',' | b':' | b'[' | b']' | b'{' | b'}' => Err(self.peek_invalid_type(&visitor)),
+            _ => {
+                self.scratch.clear();
+                match tri!(self.read.parse_unquoted_str(&mut self.scratch)) {
+                    Reference::Borrowed(s) => visitor.visit_borrowed_str(s),
+                    Reference::Copied(s) => visitor.visit_str(s),
+                }
+            }
         };
 
         match value {
@@ -1611,13 +1673,28 @@ impl<'de, 'a, R: Read<'de>> de::Deserializer<'de> for &'a mut Deserializer<R> {
             b'"' => {
                 self.eat_char();
                 self.scratch.clear();
-                match tri!(self.read.parse_str_raw(&mut self.scratch)) {
+                match tri!(self.read.parse_double_quoted_str_raw(&mut self.scratch)) {
+                    Reference::Borrowed(b) => visitor.visit_borrowed_bytes(b),
+                    Reference::Copied(b) => visitor.visit_bytes(b),
+                }
+            }
+            b'\'' => {
+                self.eat_char();
+                self.scratch.clear();
+                match tri!(self.read.parse_single_quoted_str_raw(&mut self.scratch)) {
                     Reference::Borrowed(b) => visitor.visit_borrowed_bytes(b),
                     Reference::Copied(b) => visitor.visit_bytes(b),
                 }
             }
             b'[' => self.deserialize_seq(visitor),
-            _ => Err(self.peek_invalid_type(&visitor)),
+            b',' | b':' | b']' | b'{' | b'}' => Err(self.peek_invalid_type(&visitor)),
+            _ => {
+                self.scratch.clear();
+                match tri!(self.read.parse_unquoted_str_raw(&mut self.scratch)) {
+                    Reference::Borrowed(b) => visitor.visit_borrowed_bytes(b),
+                    Reference::Copied(b) => visitor.visit_bytes(b),
+                }
+            }
         };
 
         match value {
@@ -1968,9 +2045,14 @@ impl<'de, 'a, R: Read<'de> + 'a> de::MapAccess<'de> for MapAccess<'a, R> {
         };
 
         match peek {
-            Some(b'"') => seed.deserialize(MapKey { de: &mut *self.de }).map(Some),
+            Some(b'"') => seed.deserialize(MapKey { de: &mut *self.de, quoted: true }).map(Some),
             Some(b'}') => Err(self.de.peek_error(ErrorCode::TrailingComma)),
-            Some(_) => Err(self.de.peek_error(ErrorCode::KeyMustBeAString)),
+            | Some(b',')
+            | Some(b':')
+            | Some(b'[')
+            | Some(b']')
+            | Some(b'{') => Err(self.de.peek_error(ErrorCode::KeyMustBeAString)),
+            Some(_) => seed.deserialize(MapKey { de: &mut *self.de, quoted: false }).map(Some),
             None => Err(self.de.peek_error(ErrorCode::EofWhileParsingValue)),
         }
     }
@@ -2103,6 +2185,7 @@ impl<'de, 'a, R: Read<'de> + 'a> de::VariantAccess<'de> for UnitVariantAccess<'a
 /// deserialize invalid JSON successfully.
 struct MapKey<'a, R: 'a> {
     de: &'a mut Deserializer<R>,
+    quoted: bool,
 }
 
 macro_rules! deserialize_integer_key {
@@ -2113,7 +2196,13 @@ macro_rules! deserialize_integer_key {
         {
             self.de.eat_char();
             self.de.scratch.clear();
-            let string = tri!(self.de.read.parse_str(&mut self.de.scratch));
+
+            let string = if self.quoted {
+                tri!(self.de.read.parse_double_quoted_str(&mut self.de.scratch))
+            } else {
+                tri!(self.de.read.parse_unquoted_str(&mut self.de.scratch))
+            };
+
             match (string.parse(), string) {
                 (Ok(integer), _) => visitor.$visit(integer),
                 (Err(_), Reference::Borrowed(s)) => visitor.visit_borrowed_str(s),
@@ -2136,7 +2225,14 @@ where
     {
         self.de.eat_char();
         self.de.scratch.clear();
-        match tri!(self.de.read.parse_str(&mut self.de.scratch)) {
+
+        let result = if self.quoted {
+            tri!(self.de.read.parse_double_quoted_str(&mut self.de.scratch))
+        } else {
+            tri!(self.de.read.parse_unquoted_str(&mut self.de.scratch))
+        };
+
+        match result {
             Reference::Borrowed(s) => visitor.visit_borrowed_str(s),
             Reference::Copied(s) => visitor.visit_str(s),
         }
