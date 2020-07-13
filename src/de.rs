@@ -994,9 +994,14 @@ impl<'de, R: Read<'de>> Deserializer<R> {
             }
             Some(b',') => {
                 self.eat_char();
-                match self.parse_whitespace() {
-                    Ok(Some(b']')) => Err(self.peek_error(ErrorCode::TrailingComma)),
-                    _ => Err(self.peek_error(ErrorCode::TrailingCharacters)),
+                match tri!(self.parse_whitespace()) {
+                    Some(b']') => {
+                        self.eat_char();
+                        Ok(())
+                    }
+                    Some(b',') => Err(self.peek_error(ErrorCode::TrailingComma)),
+                    Some(_) => Err(self.peek_error(ErrorCode::TrailingCharacters)),
+                    None => Err(self.peek_error(ErrorCode::EofWhileParsingList)),
                 }
             }
             Some(_) => Err(self.peek_error(ErrorCode::TrailingCharacters)),
@@ -1010,7 +1015,18 @@ impl<'de, R: Read<'de>> Deserializer<R> {
                 self.eat_char();
                 Ok(())
             }
-            Some(b',') => Err(self.peek_error(ErrorCode::TrailingComma)),
+            Some(b',') => {
+                self.eat_char();
+                match tri!(self.parse_whitespace()) {
+                    Some(b']') => {
+                        self.eat_char();
+                        Ok(())
+                    }
+                    Some(b',') => Err(self.peek_error(ErrorCode::TrailingComma)),
+                    Some(_) => Err(self.peek_error(ErrorCode::TrailingCharacters)),
+                    None => Err(self.peek_error(ErrorCode::EofWhileParsingList)),
+                }
+            }
             Some(_) => Err(self.peek_error(ErrorCode::TrailingCharacters)),
             None => Err(self.peek_error(ErrorCode::EofWhileParsingObject)),
         }
@@ -1998,7 +2014,8 @@ impl<'de, 'a, R: Read<'de> + 'a> de::SeqAccess<'de> for SeqAccess<'a, R> {
         };
 
         match peek {
-            Some(b']') => Err(self.de.peek_error(ErrorCode::TrailingComma)),
+            Some(b',') => Err(self.de.peek_error(ErrorCode::TrailingComma)),
+            Some(b']') => Ok(None),
             Some(_) => Ok(Some(tri!(seed.deserialize(&mut *self.de)))),
             None => Err(self.de.peek_error(ErrorCode::EofWhileParsingValue)),
         }
@@ -2046,7 +2063,8 @@ impl<'de, 'a, R: Read<'de> + 'a> de::MapAccess<'de> for MapAccess<'a, R> {
 
         match peek {
             Some(b'"') => seed.deserialize(MapKey { de: &mut *self.de, quoted: true }).map(Some),
-            Some(b'}') => Err(self.de.peek_error(ErrorCode::TrailingComma)),
+            Some(b',') => Err(self.de.peek_error(ErrorCode::TrailingComma)),
+            Some(b'}') => Ok(None),
             | Some(b',')
             | Some(b':')
             | Some(b'[')
