@@ -300,7 +300,7 @@
 //! [macro]: https://docs.serde.rs/serde_hjson/macro.json.html
 //! [`serde-json-core`]: https://japaric.github.io/serde-json-core/serde_hjson_core/
 
-#![doc(html_root_url = "https://docs.rs/serde_hjson/1.0.56")]
+#![doc(html_root_url = "https://docs.rs/serde_hjson/1.0.0-alpha1")]
 #![deny(clippy::all, clippy::pedantic)]
 // Ignored clippy lints
 #![allow(

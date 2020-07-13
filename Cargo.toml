@@ -1,12 +1,12 @@
 [package]
 name = "serde_hjson"
-version = "1.0.56" # remember to update html_root_url
+version = "1.0.0-alpha1" # remember to update html_root_url
 authors = ["Erick Tryzelaar <erick.tryzelaar@gmail.com>", "David Tolnay <dtolnay@gmail.com>"]
 license = "MIT OR Apache-2.0"
-description = "A JSON serialization file format"
-repository = "https://github.com/serde-rs/json"
+description = "Hjson parser for the Serde ecosystem"
+repository = "https://github.com/hjson/hjson-rust"
 documentation = "https://docs.serde.rs/serde_hjson/"
-keywords = ["json", "serde", "serialization"]
+keywords = ["hjson", "json", "serde", "serialization"]
 categories = ["encoding"]
 readme = "README.md"
 include = ["build.rs", "src/**/*.rs", "README.md", "LICENSE-APACHE", "LICENSE-MIT"]
