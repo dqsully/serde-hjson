@@ -25,6 +25,8 @@ pub trait Read<'de>: private::Sealed {
     fn next(&mut self) -> Result<Option<u8>>;
     #[doc(hidden)]
     fn peek(&mut self) -> Result<Option<u8>>;
+    #[doc(hidden)]
+    fn peek_n(&mut self, bytes: usize) -> Result<&[u8]>;
 
     /// Only valid after a call to peek(). Discards the peeked byte.
     #[doc(hidden)]
@@ -221,8 +223,9 @@ where
     R: io::Read,
 {
     iter: LineColIterator<io::Bytes<R>>,
-    /// Temporary storage of peeked byte.
-    ch: Option<u8>,
+    /// Temporary storage of peeked bytes.
+    ch: [u8; 4],
+    len: usize,
     #[cfg(feature = "raw_value")]
     raw_buffer: Option<Vec<u8>>,
 }
@@ -264,7 +267,8 @@ where
     pub fn new(reader: R) -> Self {
         IoRead {
             iter: LineColIterator::new(reader.bytes()),
-            ch: None,
+            ch: [0; 4],
+            len: 0,
             #[cfg(feature = "raw_value")]
             raw_buffer: None,
         }
@@ -421,17 +425,22 @@ where
 {
     #[inline]
     fn next(&mut self) -> Result<Option<u8>> {
-        match self.ch.take() {
-            Some(ch) => {
-                #[cfg(feature = "raw_value")]
-                {
-                    if let Some(ref mut buf) = self.raw_buffer {
-                        buf.push(ch);
-                    }
+        if self.len > 0 {
+            #[cfg(feature = "raw_value")]
+            {
+                if let Some(ref mut buf) = self.raw_buffer {
+                    buf.push(ch);
                 }
-                Ok(Some(ch))
             }
-            None => match self.iter.next() {
+
+            let ch = self.ch[0];
+
+            self.len -= 1;
+            self.ch.copy_within(1.., 0);
+
+            Ok(Some(ch))
+        } else {
+            match self.iter.next() {
                 Some(Err(err)) => Err(Error::io(err)),
                 Some(Ok(ch)) => {
                     #[cfg(feature = "raw_value")]
@@ -443,37 +452,63 @@ where
                     Ok(Some(ch))
                 }
                 None => Ok(None),
-            },
+            }
         }
     }
 
     #[inline]
     fn peek(&mut self) -> Result<Option<u8>> {
-        match self.ch {
-            Some(ch) => Ok(Some(ch)),
-            None => match self.iter.next() {
+        if self.len == 0 {
+            match self.iter.next() {
                 Some(Err(err)) => Err(Error::io(err)),
                 Some(Ok(ch)) => {
-                    self.ch = Some(ch);
-                    Ok(self.ch)
+                    self.ch[0] = ch;
+                    self.len = 1;
+                    Ok(Some(ch))
                 }
-                None => Ok(None),
-            },
+                None => Ok(None)
+            }
+        } else {
+            Ok(Some(self.ch[0]))
         }
+    }
+
+    #[inline]
+    fn peek_n(&mut self, bytes: usize) -> Result<&[u8]> {
+        assert!(bytes <= 4, "can only peek a max of 4 bytes");
+
+        while self.len < bytes {
+            match self.iter.next() {
+                Some(Err(err)) => return Err(Error::io(err)),
+                Some(Ok(ch)) => {
+                    self.ch[self.len] = ch;
+                    self.len += 1;
+                }
+                None => break,
+            }
+        }
+
+        Ok(&self.ch[..self.len])
     }
 
     #[cfg(not(feature = "raw_value"))]
     #[inline]
     fn discard(&mut self) {
-        self.ch = None;
+        if self.len > 0 {
+            self.len -= 1;
+            self.ch.copy_within(1.., 0);
+        }
     }
 
     #[cfg(feature = "raw_value")]
     fn discard(&mut self) {
-        if let Some(ch) = self.ch.take() {
+        if self.len > 0 {
             if let Some(ref mut buf) = self.raw_buffer {
-                buf.push(ch);
+                buf.push(ch[0]);
             }
+
+            self.len -= 1;
+            self.ch.copy_within(1.., 0);
         }
     }
 
@@ -491,10 +526,7 @@ where
     }
 
     fn byte_offset(&self) -> usize {
-        match self.ch {
-            Some(_) => self.iter.byte_offset() - 1,
-            None => self.iter.byte_offset(),
-        }
+        self.iter.byte_offset() - self.len
     }
 
     fn parse_double_quoted_str<'s>(
@@ -922,6 +954,17 @@ impl<'a> Read<'a> for SliceRead<'a> {
     }
 
     #[inline]
+    fn peek_n(&mut self, bytes: usize) -> Result<&[u8]> {
+        // Carryover from IoRead implementation
+        assert!(bytes <= 4, "can only peek a max of 4 bytes");
+        if self.index + bytes > self.slice.len() {
+            Ok(&self.slice[self.index..])
+        } else {
+            Ok(&self.slice[self.index..self.index + bytes])
+        }
+    }
+
+    #[inline]
     fn discard(&mut self) {
         self.index += 1;
     }
@@ -1150,6 +1193,11 @@ impl<'a> Read<'a> for StrRead<'a> {
     #[inline]
     fn peek(&mut self) -> Result<Option<u8>> {
         self.delegate.peek()
+    }
+
+    #[inline]
+    fn peek_n(&mut self, bytes: usize) -> Result<&[u8]> {
+        self.delegate.peek_n(bytes)
     }
 
     #[inline]
