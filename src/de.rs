@@ -2121,7 +2121,6 @@ impl<'de, 'a, R: Read<'de> + 'a> de::MapAccess<'de> for MapAccess<'a, R> {
             Some(b'"') => seed.deserialize(MapKey { de: &mut *self.de, quoted: true }).map(Some),
             Some(b',') => Err(self.de.peek_error(ErrorCode::TrailingComma)),
             Some(b'}') => Ok(None),
-            | Some(b',')
             | Some(b':')
             | Some(b'[')
             | Some(b']')
