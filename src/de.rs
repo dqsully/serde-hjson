@@ -264,8 +264,8 @@ impl<'de, R: Read<'de>> Deserializer<R> {
                             self.eat_chars(2);
                             tri!(self.parse_multiline_comment());
                         }
-                        &[other, ..] => return Ok(Some(other)),
-                        [] => return Ok(None),
+                        slice if !slice.is_empty() => return Ok(Some(slice[0])),
+                        _ => return Ok(None),
                     }
                 }
                 other => {
