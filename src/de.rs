@@ -204,12 +204,20 @@ impl<'de, R: Read<'de>> Deserializer<R> {
         self.read.peek()
     }
 
+    fn peek_n(&mut self, bytes: usize) -> Result<&[u8]> {
+        self.read.peek_n(bytes)
+    }
+
     fn peek_or_null(&mut self) -> Result<u8> {
         Ok(tri!(self.peek()).unwrap_or(b'\x00'))
     }
 
     fn eat_char(&mut self) {
         self.read.discard();
+    }
+
+    fn eat_chars(&mut self, bytes: usize) {
+        self.read.discard_n(bytes);
     }
 
     fn next_char(&mut self) -> Result<Option<u8>> {
@@ -242,11 +250,59 @@ impl<'de, R: Read<'de>> Deserializer<R> {
                 Some(b' ') | Some(b'\n') | Some(b'\t') | Some(b'\r') => {
                     self.eat_char();
                 }
+                Some(b'#') => {
+                    self.eat_char();
+                    tri!(self.parse_line_comment());
+                }
+                Some(b'/') => {
+                    match tri!(self.peek_n(2)) {
+                        [b'/', b'/'] => {
+                            self.eat_chars(2);
+                            tri!(self.parse_line_comment());
+                        }
+                        [b'/', b'*'] => {
+                            self.eat_chars(2);
+                            tri!(self.parse_multiline_comment());
+                        }
+                        &[other, ..] => return Ok(Some(other)),
+                        [] => return Ok(None),
+                    }
+                }
                 other => {
                     return Ok(other);
                 }
             }
         }
+    }
+
+    fn parse_line_comment(&mut self) -> Result<()> {
+        loop {
+            match tri!(self.peek()) {
+                Some(b'\n') | None => break,
+                _ => self.eat_char(),
+            }
+        }
+
+        Ok(())
+    }
+
+    fn parse_multiline_comment(&mut self) -> Result<()> {
+        loop {
+            match tri!(self.peek()) {
+                Some(b'*') => {
+                    if let [_, b'/'] = tri!(self.peek_n(2)) {
+                        self.eat_chars(2);
+                        break
+                    }
+                }
+                None => break,
+                _ => {}
+            }
+
+            self.eat_char();
+        }
+
+        Ok(())
     }
 
     #[cold]

@@ -31,7 +31,9 @@ This is a work-in-progress fork of serde_json to convert it for Hjson
 
 * Parsing
     * [x] Prelim single-quote, unquoted, and unquoted key strings
+    * [ ] Prelim raw single-quote, unquoted, and unquoted key strings
     * [x] Allow trailing commas
+    * [x] Comments
     * [ ] Multiline strings
     * [ ] Updated tests
 * Generating
