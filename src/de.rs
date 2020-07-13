@@ -295,8 +295,8 @@ impl<'de, R: Read<'de>> Deserializer<R> {
                         break
                     }
                 }
+                Some(..) => {}
                 None => break,
-                _ => {}
             }
 
             self.eat_char();
