@@ -429,14 +429,14 @@ where
     #[inline]
     fn next(&mut self) -> Result<Option<u8>> {
         if self.len > 0 {
+            let ch = self.ch[0];
+
             #[cfg(feature = "raw_value")]
             {
                 if let Some(ref mut buf) = self.raw_buffer {
                     buf.push(ch);
                 }
             }
-
-            let ch = self.ch[0];
 
             self.len -= 1;
             self.ch.copy_within(1.., 0);
