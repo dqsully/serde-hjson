@@ -2,14 +2,14 @@
 //!
 //! # Constructing JSON
 //!
-//! Serde JSON provides a [`json!` macro][macro] to build `serde_json::Value`
+//! Serde JSON provides a [`json!` macro][macro] to build `serde_hjson::Value`
 //! objects with very natural JSON syntax.
 //!
 //! ```
-//! use serde_json::json;
+//! use serde_hjson::json;
 //!
 //! fn main() {
-//!     // The type of `john` is `serde_json::Value`
+//!     // The type of `john` is `serde_hjson::Value`
 //!     let john = json!({
 //!         "name": "John Doe",
 //!         "age": 43,
@@ -26,7 +26,7 @@
 //! }
 //! ```
 //!
-//! The `Value::to_string()` function converts a `serde_json::Value` into a
+//! The `Value::to_string()` function converts a `serde_hjson::Value` into a
 //! `String` of JSON text.
 //!
 //! One neat thing about the `json!` macro is that variables and expressions can
@@ -35,14 +35,14 @@
 //! be represented as JSON.
 //!
 //! ```
-//! # use serde_json::json;
+//! # use serde_hjson::json;
 //! #
 //! # fn random_phone() -> u16 { 0 }
 //! #
 //! let full_name = "John Doe";
 //! let age_last_year = 42;
 //!
-//! // The type of `john` is `serde_json::Value`
+//! // The type of `john` is `serde_hjson::Value`
 //! let john = json!({
 //!     "name": full_name,
 //!     "age": age_last_year + 1,
@@ -52,14 +52,14 @@
 //! });
 //! ```
 //!
-//! A string of JSON data can be parsed into a `serde_json::Value` by the
-//! [`serde_json::from_str`][from_str] function. There is also
+//! A string of JSON data can be parsed into a `serde_hjson::Value` by the
+//! [`serde_hjson::from_str`][from_str] function. There is also
 //! [`from_slice`][from_slice] for parsing from a byte slice `&[u8]` and
 //! [`from_reader`][from_reader] for parsing from any `io::Read` like a File or
 //! a TCP stream.
 //!
 //! ```
-//! use serde_json::{json, Value, Error};
+//! use serde_hjson::{json, Value, Error};
 //!
 //! fn untyped_example() -> Result<(), Error> {
 //!     // Some JSON input data as a &str. Maybe this comes from the user.
@@ -73,8 +73,8 @@
 //!             ]
 //!         }"#;
 //!
-//!     // Parse the string of data into serde_json::Value.
-//!     let v: Value = serde_json::from_str(data)?;
+//!     // Parse the string of data into serde_hjson::Value.
+//!     let v: Value = serde_hjson::from_str(data)?;
 //!
 //!     // Access parts of the data by indexing with square brackets.
 //!     println!("Please call {} at the number {}", v["name"], v["phones"][0]);
@@ -85,10 +85,10 @@
 //! # untyped_example().unwrap();
 //! ```
 //!
-//! [macro]: https://docs.serde.rs/serde_json/macro.json.html
-//! [from_str]: https://docs.serde.rs/serde_json/de/fn.from_str.html
-//! [from_slice]: https://docs.serde.rs/serde_json/de/fn.from_slice.html
-//! [from_reader]: https://docs.serde.rs/serde_json/de/fn.from_reader.html
+//! [macro]: https://docs.serde.rs/serde_hjson/macro.json.html
+//! [from_str]: https://docs.serde.rs/serde_hjson/de/fn.from_str.html
+//! [from_slice]: https://docs.serde.rs/serde_hjson/de/fn.from_slice.html
+//! [from_reader]: https://docs.serde.rs/serde_hjson/de/fn.from_reader.html
 
 use crate::error::Error;
 use crate::io;
@@ -106,13 +106,13 @@ pub use crate::raw::{to_raw_value, RawValue};
 
 /// Represents any valid JSON value.
 ///
-/// See the `serde_json::value` module documentation for usage examples.
+/// See the `serde_hjson::value` module documentation for usage examples.
 #[derive(Clone, Eq, PartialEq)]
 pub enum Value {
     /// Represents a JSON null value.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let v = json!(null);
     /// ```
@@ -121,7 +121,7 @@ pub enum Value {
     /// Represents a JSON boolean.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let v = json!(true);
     /// ```
@@ -130,7 +130,7 @@ pub enum Value {
     /// Represents a JSON number, whether integer or floating point.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let v = json!(12.5);
     /// ```
@@ -139,7 +139,7 @@ pub enum Value {
     /// Represents a JSON string.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let v = json!("a string");
     /// ```
@@ -148,7 +148,7 @@ pub enum Value {
     /// Represents a JSON array.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let v = json!(["an", "array"]);
     /// ```
@@ -157,13 +157,13 @@ pub enum Value {
     /// Represents a JSON object.
     ///
     /// By default the map is backed by a BTreeMap. Enable the `preserve_order`
-    /// feature of serde_json to use IndexMap instead, which preserves
+    /// feature of serde_hjson to use IndexMap instead, which preserves
     /// entries in the order they are inserted into the map. In particular, this
     /// allows JSON data to be deserialized into a Value and serialized to a
     /// string while retaining the order of map keys in the input.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let v = json!({ "an": "object" });
     /// ```
@@ -216,7 +216,7 @@ impl fmt::Display for Value {
     /// Display a JSON value as a string.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let json = json!({ "city": "London", "street": "10 Downing Street" });
     ///
@@ -268,7 +268,7 @@ impl Value {
     /// or the given index is not within the bounds of the array.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let object = json!({ "A": 65, "B": 66, "C": 67 });
     /// assert_eq!(*object.get("A").unwrap(), json!(65));
@@ -284,7 +284,7 @@ impl Value {
     /// `None`.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let object = json!({
     ///     "A": ["a", "á", "à"],
@@ -310,7 +310,7 @@ impl Value {
     /// or the given index is not within the bounds of the array.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let mut object = json!({ "A": 65, "B": 66, "C": 67 });
     /// *object.get_mut("A").unwrap() = json!(69);
@@ -329,7 +329,7 @@ impl Value {
     /// object.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let obj = json!({ "a": { "nested": true }, "b": ["an", "array"] });
     ///
@@ -347,7 +347,7 @@ impl Value {
     /// otherwise.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let v = json!({ "a": { "nested": true }, "b": ["an", "array"] });
     ///
@@ -368,7 +368,7 @@ impl Value {
     /// Returns None otherwise.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let mut v = json!({ "a": { "nested": true } });
     ///
@@ -389,7 +389,7 @@ impl Value {
     /// array.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let obj = json!({ "a": ["an", "array"], "b": { "an": "object" } });
     ///
@@ -406,7 +406,7 @@ impl Value {
     /// otherwise.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let v = json!({ "a": ["an", "array"], "b": { "an": "object" } });
     ///
@@ -427,7 +427,7 @@ impl Value {
     /// Returns None otherwise.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let mut v = json!({ "a": ["an", "array"] });
     ///
@@ -447,7 +447,7 @@ impl Value {
     /// to return the string slice.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let v = json!({ "a": "some string", "b": false });
     ///
@@ -464,7 +464,7 @@ impl Value {
     /// otherwise.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let v = json!({ "a": "some string", "b": false });
     ///
@@ -493,7 +493,7 @@ impl Value {
     /// Returns true if the `Value` is a Number. Returns false otherwise.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let v = json!({ "a": 1, "b": "2" });
     ///
@@ -516,7 +516,7 @@ impl Value {
     /// return the integer value.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let big = i64::max_value() as u64 + 10;
     /// let v = json!({ "a": 64, "b": big, "c": 256.0 });
@@ -542,7 +542,7 @@ impl Value {
     /// return the integer value.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let v = json!({ "a": 64, "b": -64, "c": 256.0 });
     ///
@@ -570,7 +570,7 @@ impl Value {
     /// `is_u64` return false but this is not a guarantee in the future.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let v = json!({ "a": 256.0, "b": 64, "c": -64 });
     ///
@@ -591,7 +591,7 @@ impl Value {
     /// None otherwise.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let big = i64::max_value() as u64 + 10;
     /// let v = json!({ "a": 64, "b": big, "c": 256.0 });
@@ -611,7 +611,7 @@ impl Value {
     /// None otherwise.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let v = json!({ "a": 64, "b": -64, "c": 256.0 });
     ///
@@ -630,7 +630,7 @@ impl Value {
     /// None otherwise.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let v = json!({ "a": 256.0, "b": 64, "c": -64 });
     ///
@@ -651,7 +651,7 @@ impl Value {
     /// guaranteed to return the boolean value.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let v = json!({ "a": false, "b": "false" });
     ///
@@ -668,7 +668,7 @@ impl Value {
     /// otherwise.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let v = json!({ "a": false, "b": "false" });
     ///
@@ -690,7 +690,7 @@ impl Value {
     /// to return `Some(())`.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let v = json!({ "a": null, "b": false });
     ///
@@ -706,7 +706,7 @@ impl Value {
     /// If the `Value` is a Null, returns (). Returns None otherwise.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let v = json!({ "a": null, "b": false });
     ///
@@ -737,7 +737,7 @@ impl Value {
     /// # Examples
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let data = json!({
     ///     "x": {
@@ -792,11 +792,11 @@ impl Value {
     /// # Example of Use
     ///
     /// ```
-    /// use serde_json::Value;
+    /// use serde_hjson::Value;
     ///
     /// fn main() {
     ///     let s = r#"{"x": 1.0, "y": 2.0}"#;
-    ///     let mut value: Value = serde_json::from_str(s).unwrap();
+    ///     let mut value: Value = serde_hjson::from_str(s).unwrap();
     ///
     ///     // Check value using read-only pointer
     ///     assert_eq!(value.pointer("/x"), Some(&1.0.into()));
@@ -849,7 +849,7 @@ impl Value {
     /// Takes the value out of the `Value`, leaving a `Null` in its place.
     ///
     /// ```
-    /// # use serde_json::json;
+    /// # use serde_hjson::json;
     /// #
     /// let mut v = json!({ "x": "y" });
     /// assert_eq!(v["x"].take(), json!("y"));
@@ -868,7 +868,7 @@ impl Value {
 ///
 /// ```
 /// # use serde::Deserialize;
-/// use serde_json::Value;
+/// use serde_hjson::Value;
 ///
 /// #[derive(Deserialize)]
 /// struct Settings {
@@ -877,9 +877,9 @@ impl Value {
 ///     extras: Value,
 /// }
 ///
-/// # fn try_main() -> Result<(), serde_json::Error> {
+/// # fn try_main() -> Result<(), serde_hjson::Error> {
 /// let data = r#" { "level": 42 } "#;
-/// let s: Settings = serde_json::from_str(data)?;
+/// let s: Settings = serde_hjson::from_str(data)?;
 ///
 /// assert_eq!(s.level, 42);
 /// assert_eq!(s.extras, Value::Null);
@@ -901,14 +901,14 @@ mod index;
 mod partial_eq;
 mod ser;
 
-/// Convert a `T` into `serde_json::Value` which is an enum that can represent
+/// Convert a `T` into `serde_hjson::Value` which is an enum that can represent
 /// any valid JSON data.
 ///
 /// # Example
 ///
 /// ```
 /// use serde::Serialize;
-/// use serde_json::json;
+/// use serde_hjson::json;
 ///
 /// use std::error::Error;
 ///
@@ -924,13 +924,13 @@ mod ser;
 ///         location: "Menlo Park, CA".to_owned(),
 ///     };
 ///
-///     // The type of `expected` is `serde_json::Value`
+///     // The type of `expected` is `serde_hjson::Value`
 ///     let expected = json!({
 ///         "fingerprint": "0xF9BA143B95FF6D82",
 ///         "location": "Menlo Park, CA",
 ///     });
 ///
-///     let v = serde_json::to_value(u).unwrap();
+///     let v = serde_hjson::to_value(u).unwrap();
 ///     assert_eq!(v, expected);
 ///
 ///     Ok(())
@@ -952,7 +952,7 @@ mod ser;
 ///     let mut map = BTreeMap::new();
 ///     map.insert(vec![32, 64], "x86");
 ///
-///     println!("{}", serde_json::to_value(map).unwrap_err());
+///     println!("{}", serde_hjson::to_value(map).unwrap_err());
 /// }
 /// ```
 // Taking by value is more friendly to iterator adapters, option and result
@@ -964,13 +964,13 @@ where
     value.serialize(Serializer)
 }
 
-/// Interpret a `serde_json::Value` as an instance of type `T`.
+/// Interpret a `serde_hjson::Value` as an instance of type `T`.
 ///
 /// # Example
 ///
 /// ```
 /// use serde::Deserialize;
-/// use serde_json::json;
+/// use serde_hjson::json;
 ///
 /// #[derive(Deserialize, Debug)]
 /// struct User {
@@ -979,13 +979,13 @@ where
 /// }
 ///
 /// fn main() {
-///     // The type of `j` is `serde_json::Value`
+///     // The type of `j` is `serde_hjson::Value`
 ///     let j = json!({
 ///         "fingerprint": "0xF9BA143B95FF6D82",
 ///         "location": "Menlo Park, CA"
 ///     });
 ///
-///     let u: User = serde_json::from_value(j).unwrap();
+///     let u: User = serde_hjson::from_value(j).unwrap();
 ///     println!("{:#?}", u);
 /// }
 /// ```

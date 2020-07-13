@@ -1,4 +1,4 @@
-use serde_json::json;
+use serde_hjson::json;
 
 fn main() {
     json!({ "a" , "b": true });

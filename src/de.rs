@@ -35,7 +35,7 @@ impl<'de, R> Deserializer<R>
 where
     R: read::Read<'de>,
 {
-    /// Create a JSON deserializer from one of the possible serde_json input
+    /// Create a JSON deserializer from one of the possible serde_hjson input
     /// sources.
     ///
     /// Typically it is more convenient to use one of these methods instead:
@@ -163,14 +163,14 @@ impl<'de, R: Read<'de>> Deserializer<R> {
     /// completed, including, but not limited to, Display and Debug and Drop
     /// impls.
     ///
-    /// *This method is only available if serde_json is built with the
+    /// *This method is only available if serde_hjson is built with the
     /// `"unbounded_depth"` feature.*
     ///
     /// # Examples
     ///
     /// ```
     /// use serde::Deserialize;
-    /// use serde_json::Value;
+    /// use serde_hjson::Value;
     ///
     /// fn main() {
     ///     let mut json = String::new();
@@ -178,7 +178,7 @@ impl<'de, R: Read<'de>> Deserializer<R> {
     ///         json = format!("[{}]", json);
     ///     }
     ///
-    ///     let mut deserializer = serde_json::Deserializer::from_str(&json);
+    ///     let mut deserializer = serde_hjson::Deserializer::from_str(&json);
     ///     deserializer.disable_recursion_limit();
     ///     let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
     ///     let value = Value::deserialize(deserializer).unwrap();
@@ -1549,7 +1549,7 @@ impl<'de, 'a, R: Read<'de>> de::Deserializer<'de> for &'a mut Deserializer<R> {
     ///
     /// [RFC 7159]: https://tools.ietf.org/html/rfc7159
     ///
-    /// The behavior of serde_json is specified to fail on non-UTF-8 strings
+    /// The behavior of serde_hjson is specified to fail on non-UTF-8 strings
     /// when deserializing into Rust UTF-8 string types such as String, and
     /// succeed with non-UTF-8 bytes when deserializing using this method.
     ///
@@ -1563,9 +1563,9 @@ impl<'de, 'a, R: Read<'de>> de::Deserializer<'de> for &'a mut Deserializer<R> {
     /// ```
     /// use serde_bytes::ByteBuf;
     ///
-    /// fn look_at_bytes() -> Result<(), serde_json::Error> {
+    /// fn look_at_bytes() -> Result<(), serde_hjson::Error> {
     ///     let json_data = b"\"some bytes: \xe5\x00\xe5\"";
-    ///     let bytes: ByteBuf = serde_json::from_slice(json_data)?;
+    ///     let bytes: ByteBuf = serde_hjson::from_slice(json_data)?;
     ///
     ///     assert_eq!(b'\xe5', bytes[12]);
     ///     assert_eq!(b'\0', bytes[13]);
@@ -1586,7 +1586,7 @@ impl<'de, 'a, R: Read<'de>> de::Deserializer<'de> for &'a mut Deserializer<R> {
     ///
     /// fn look_at_bytes() {
     ///     let json_data = b"\"invalid unicode surrogate: \\uD801\"";
-    ///     let parsed: Result<ByteBuf, _> = serde_json::from_slice(json_data);
+    ///     let parsed: Result<ByteBuf, _> = serde_hjson::from_slice(json_data);
     ///
     ///     assert!(parsed.is_err());
     ///
@@ -2219,7 +2219,7 @@ where
 /// arrays, objects, or strings, or be followed by whitespace or a self-delineating value.
 ///
 /// ```
-/// use serde_json::{Deserializer, Value};
+/// use serde_hjson::{Deserializer, Value};
 ///
 /// fn main() {
 ///     let data = "{\"k\": 3}1\"cool\"\"stuff\" 3{}  [0, 1, 2]";
@@ -2244,7 +2244,7 @@ where
     R: read::Read<'de>,
     T: de::Deserialize<'de>,
 {
-    /// Create a JSON stream deserializer from one of the possible serde_json
+    /// Create a JSON stream deserializer from one of the possible serde_hjson
     /// input sources.
     ///
     /// Typically it is more convenient to use one of these methods instead:
@@ -2271,7 +2271,7 @@ where
     /// ```
     /// let data = b"[0] [1] [";
     ///
-    /// let de = serde_json::Deserializer::from_slice(data);
+    /// let de = serde_hjson::Deserializer::from_slice(data);
     /// let mut stream = de.into_iter::<Vec<i32>>();
     /// assert_eq!(0, stream.byte_offset());
     ///
@@ -2393,10 +2393,10 @@ where
 /// Deserialize an instance of type `T` from an IO stream of JSON.
 ///
 /// The content of the IO stream is deserialized directly from the stream
-/// without being buffered in memory by serde_json.
+/// without being buffered in memory by serde_hjson.
 ///
 /// When reading from a source against which short reads are not efficient, such
-/// as a [`File`], you will want to apply your own buffering because serde_json
+/// as a [`File`], you will want to apply your own buffering because serde_hjson
 /// will not buffer the input. See [`std::io::BufReader`].
 ///
 /// It is expected that the input stream ends after the deserialized object.
@@ -2438,7 +2438,7 @@ where
 ///     let reader = BufReader::new(file);
 ///
 ///     // Read the JSON contents of the file as an instance of `User`.
-///     let u = serde_json::from_reader(reader)?;
+///     let u = serde_hjson::from_reader(reader)?;
 ///
 ///     // Return the `User`.
 ///     Ok(u)
@@ -2467,7 +2467,7 @@ where
 /// }
 ///
 /// fn read_user_from_stream(tcp_stream: TcpStream) -> Result<User, Box<dyn Error>> {
-///     let mut de = serde_json::Deserializer::from_reader(tcp_stream);
+///     let mut de = serde_hjson::Deserializer::from_reader(tcp_stream);
 ///     let u = User::deserialize(&mut de)?;
 ///
 ///     Ok(u)
@@ -2523,7 +2523,7 @@ where
 ///             \"location\": \"Menlo Park, CA\"
 ///         }";
 ///
-///     let u: User = serde_json::from_slice(j).unwrap();
+///     let u: User = serde_hjson::from_slice(j).unwrap();
 ///     println!("{:#?}", u);
 /// }
 /// ```
@@ -2565,7 +2565,7 @@ where
 ///             \"location\": \"Menlo Park, CA\"
 ///         }";
 ///
-///     let u: User = serde_json::from_str(j).unwrap();
+///     let u: User = serde_hjson::from_str(j).unwrap();
 ///     println!("{:#?}", u);
 /// }
 /// ```
