@@ -494,7 +494,9 @@ where
     #[cfg(not(feature = "raw_value"))]
     #[inline]
     fn discard(&mut self) {
-        if self.len > 0 {
+        if self.len == 1 {
+            self.len = 0;
+        } else if self.len > 0 {
             self.len -= 1;
             self.ch.copy_within(1.., 0);
         }
@@ -504,7 +506,7 @@ where
     fn discard(&mut self) {
         if self.len > 0 {
             if let Some(ref mut buf) = self.raw_buffer {
-                buf.push(ch[0]);
+                buf.push(self.ch[0]);
             }
 
             self.len -= 1;
@@ -955,8 +957,6 @@ impl<'a> Read<'a> for SliceRead<'a> {
 
     #[inline]
     fn peek_n(&mut self, bytes: usize) -> Result<&[u8]> {
-        // Carryover from IoRead implementation
-        assert!(bytes <= 4, "can only peek a max of 4 bytes");
         if self.index + bytes > self.slice.len() {
             Ok(&self.slice[self.index..])
         } else {
